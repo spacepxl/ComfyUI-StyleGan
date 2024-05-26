@@ -1,7 +1,7 @@
 # ComfyUI-StyleGan
 
 Basic support for StyleGAN2 and StyleGAN3 models.  
-![workflow](https://github.com/spacepxl/ComfyUI-StyleGan/assets/143970342/f9aaf427-f66d-4651-82aa-3c7b3ede6e26)
+![workflow](https://raw.githubusercontent.com/spacepxl/ComfyUI-StyleGan/main/workflow.png)
 
 Original:  
 https://github.com/NVlabs/stylegan3

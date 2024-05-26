@@ -4,6 +4,8 @@ import numpy as np
 import pickle
 import torch
 
+from .slerp import slerp
+
 from . import dnnlib
 from . import torch_utils
 sys.modules["dnnlib"] = dnnlib
@@ -43,6 +45,7 @@ class GenerateStyleGANLatent:
             "required": {
                 "stylegan_model": ("STYLEGAN", ),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 1024}),
             },
         }
     
@@ -50,9 +53,9 @@ class GenerateStyleGANLatent:
     FUNCTION = "generate_latent"
     CATEGORY = "StyleGAN"
     
-    def generate_latent(self, stylegan_model, seed):
+    def generate_latent(self, stylegan_model, seed, batch_size):
         torch.manual_seed(seed)
-        z = torch.randn([1, stylegan_model.z_dim]).cuda()
+        z = torch.randn([batch_size, stylegan_model.z_dim]).cuda()
         return (z, )
 
 class StyleGANSampler:
@@ -80,14 +83,65 @@ class StyleGANSampler:
         
         return (img, )
 
+class BlendStyleGANLatents:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "latent_1": ("STYLEGAN_LATENT", ),
+                "latent_2": ("STYLEGAN_LATENT", ),
+                "blend": ("FLOAT", {"default": 0.5, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "mode": (["lerp", "slerp"],),
+            },
+        }
+    
+    RETURN_TYPES = ("STYLEGAN_LATENT",)
+    FUNCTION = "generate_latent"
+    CATEGORY = "StyleGAN/extra"
+    
+    def generate_latent(self, latent_1, latent_2, blend, mode):
+        if latent_1.shape != latent_2.shape:
+            raise Exception(f"latent_1 shape {latent_1.shape} and latent_2 shape {latent_2.shape} do not match!")
+        
+        if mode == "slerp":
+            z = slerp(latent_1, latent_2, blend)
+        else:
+            z = torch.lerp(latent_1, latent_2, blend)
+        
+        return (z, )
+
+class BatchAverageStyleGANLatents:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "stylegan_latent": ("STYLEGAN_LATENT", ),
+            },
+        }
+    
+    RETURN_TYPES = ("STYLEGAN_LATENT",)
+    FUNCTION = "generate_latent"
+    CATEGORY = "StyleGAN/extra"
+    
+    def generate_latent(self, stylegan_latent):
+        z = torch.mean(stylegan_latent, dim=0, keepdim=True)
+        std, mean = torch.std_mean(z)
+        z = (z - mean) / std
+        
+        return (z, )
+
 NODE_CLASS_MAPPINGS = {
     "LoadStyleGAN": LoadStyleGAN,
     "GenerateStyleGANLatent": GenerateStyleGANLatent,
     "StyleGANSampler": StyleGANSampler,
+    "BlendStyleGANLatents": BlendStyleGANLatents,
+    "BatchAverageStyleGANLatents": BatchAverageStyleGANLatents,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadStyleGAN": "Load StyleGAN Model",
     "GenerateStyleGANLatent": "Generate StyleGAN Latent",
     "StyleGANSampler": "StyleGAN Sampler",
+    "BlendStyleGANLatents": "Blend StyleGAN Latents (lerp or slerp)",
+    "BatchAverageStyleGANLatents": "Batch Average StyleGAN Latents",
 }

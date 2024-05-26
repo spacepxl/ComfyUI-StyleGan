@@ -1,23 +1,11 @@
 import os
 import sys
-# import subprocess
 import numpy as np
 import pickle
 import torch
 
-# repo_dir = os.path.dirname(os.path.realpath(__file__))
-# print(repo_dir)
-# sys.path.append(os.path.join(repo_dir, "dnnlib"))
-# sys.path.append(os.path.join(repo_dir, "torch_utils"))
-# dnnlib_path = os.path.join(repo_dir, "dnnlib")
-# torch_utils_path = os.path.join(repo_dir, "torch_utils")
-# subprocess.run([sys.executable, "-m", "pip", "install", dnnlib_path, "-t", dnnlib_path])
-# subprocess.run([sys.executable, "-m", "pip", "install", torch_utils_path, "-t", torch_utils_path])
-
 from . import dnnlib
 from . import torch_utils
-# import dnnlib
-# import torch_utils
 sys.modules["dnnlib"] = dnnlib
 sys.modules["torch_utils"] = torch_utils
 

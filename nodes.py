@@ -130,12 +130,53 @@ class BatchAverageStyleGANLatents:
         
         return (z, )
 
+class TweakStyleGANLatents:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "stylegan_latent": ("STYLEGAN_LATENT", ),
+                "index_1": ("INT", {"default": 0, "min": 0, "max": 511}),
+                "offset_1": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "index_2": ("INT", {"default": 1, "min": 0, "max": 511}),
+                "offset_2": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "index_3": ("INT", {"default": 2, "min": 0, "max": 511}),
+                "offset_3": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+                "index_4": ("INT", {"default": 3, "min": 0, "max": 511}),
+                "offset_4": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
+            },
+        }
+    
+    RETURN_TYPES = ("STYLEGAN_LATENT",)
+    FUNCTION = "generate_latent"
+    CATEGORY = "StyleGAN/extra"
+    
+    def generate_latent(
+        self,
+        stylegan_latent,
+        index_1, offset_1,
+        index_2, offset_2,
+        index_3, offset_3,
+        index_4, offset_4,
+        ):
+        
+        z = stylegan_latent.detach().clone()
+        
+        indices = [index_1, index_2, index_3, index_4]
+        offsets = [offset_1, offset_2, offset_3, offset_4]
+        
+        for i in range(4):
+            z[:, indices[i]] += offsets[i]
+        
+        return (z, )
+
 NODE_CLASS_MAPPINGS = {
     "LoadStyleGAN": LoadStyleGAN,
     "GenerateStyleGANLatent": GenerateStyleGANLatent,
     "StyleGANSampler": StyleGANSampler,
     "BlendStyleGANLatents": BlendStyleGANLatents,
     "BatchAverageStyleGANLatents": BatchAverageStyleGANLatents,
+    "TweakStyleGANLatents": TweakStyleGANLatents,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -144,4 +185,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StyleGANSampler": "StyleGAN Sampler",
     "BlendStyleGANLatents": "Blend StyleGAN Latents (lerp or slerp)",
     "BatchAverageStyleGANLatents": "Batch Average StyleGAN Latents",
+    "TweakStyleGANLatents": "Tweak StyleGAN Latents",
 }

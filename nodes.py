@@ -68,6 +68,8 @@ class StyleGANSampler:
                 "stylegan_model": ("STYLEGAN", ),
                 "stylegan_latent": ("STYLEGAN_LATENT", ),
                 "class_label": ("INT", {"default": -1, "min": -1}),
+                "noise_mode": (['const', 'random'],),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
         }
     
@@ -75,7 +77,8 @@ class StyleGANSampler:
     FUNCTION = "generate_image"
     CATEGORY = "StyleGAN"
     
-    def generate_image(self, stylegan_model, stylegan_latent, class_label):
+    def generate_image(self, stylegan_model, stylegan_latent, class_label, noise_mode, seed):
+        torch.manual_seed(seed)
         if class_label < 0:
             class_label = None
         
@@ -85,7 +88,8 @@ class StyleGANSampler:
         if PROGRESS_BAR_ENABLED and batch_size > 1:
             pbar = ProgressBar(batch_size)
         for i in trange(batch_size):
-            img = stylegan_model(stylegan_latent[i].unsqueeze(0), class_label)
+            w = stylegan_model.mapping(stylegan_latent[i].unsqueeze(0), class_label)
+            img = stylegan_model.synthesis(w, noise_mode=noise_mode)
             img = torch.permute(img, (0, 2, 3, 1)) # BCHW -> BHWC
             img = torch.clip(img / 2 + 0.5, 0, 1)  # [-1, 1] -> [0, 1]
             imgs.append(img)
@@ -102,8 +106,8 @@ class BlendStyleGANLatents:
             "required": {
                 "latent_1": ("STYLEGAN_LATENT", ),
                 "latent_2": ("STYLEGAN_LATENT", ),
-                "blend": ("FLOAT", {"default": 0.5, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "mode": (["lerp", "slerp"],),
+                "blend": ("FLOAT", {"default": 0.5, "min": -10.0, "max": 10.0, "step": 0.001}),
+                "mode": (["slerp", "lerp"],),
             },
         }
     

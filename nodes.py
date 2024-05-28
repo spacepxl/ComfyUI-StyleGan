@@ -47,7 +47,9 @@ class GenerateStyleGANLatent:
             "required": {
                 "stylegan_model": ("STYLEGAN", ),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "class_label": ("INT", {"default": -1, "min": -1}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 1024}),
+                
             },
         }
     
@@ -55,10 +57,17 @@ class GenerateStyleGANLatent:
     FUNCTION = "generate_latent"
     CATEGORY = "StyleGAN"
     
-    def generate_latent(self, stylegan_model, seed, batch_size):
+    def generate_latent(self, stylegan_model, seed, class_label, batch_size):
         torch.manual_seed(seed)
+        if class_label < 0:
+            class_label = None
+        
         z = torch.randn([batch_size, stylegan_model.z_dim]).cuda()
-        return (z, )
+        w = []
+        for i in range(batch_size):
+            w.append(stylegan_model.mapping(z[i].unsqueeze(0), class_label))
+        
+        return (torch.cat(w, dim=0), )
 
 class StyleGANSampler:
     @classmethod
@@ -67,7 +76,7 @@ class StyleGANSampler:
             "required": {
                 "stylegan_model": ("STYLEGAN", ),
                 "stylegan_latent": ("STYLEGAN_LATENT", ),
-                "class_label": ("INT", {"default": -1, "min": -1}),
+                # "class_label": ("INT", {"default": -1, "min": -1}),
                 "noise_mode": (['const', 'random'],),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
@@ -77,19 +86,15 @@ class StyleGANSampler:
     FUNCTION = "generate_image"
     CATEGORY = "StyleGAN"
     
-    def generate_image(self, stylegan_model, stylegan_latent, class_label, noise_mode, seed):
+    def generate_image(self, stylegan_model, stylegan_latent, noise_mode, seed):
         torch.manual_seed(seed)
-        if class_label < 0:
-            class_label = None
-        
         imgs = []
         batch_size = stylegan_latent.size(0)
         pbar = None
         if PROGRESS_BAR_ENABLED and batch_size > 1:
             pbar = ProgressBar(batch_size)
         for i in trange(batch_size):
-            w = stylegan_model.mapping(stylegan_latent[i].unsqueeze(0), class_label)
-            img = stylegan_model.synthesis(w, noise_mode=noise_mode)
+            img = stylegan_model.synthesis(stylegan_latent[i].unsqueeze(0), noise_mode=noise_mode)
             img = torch.permute(img, (0, 2, 3, 1)) # BCHW -> BHWC
             img = torch.clip(img / 2 + 0.5, 0, 1)  # [-1, 1] -> [0, 1]
             imgs.append(img)
@@ -140,51 +145,11 @@ class BatchAverageStyleGANLatents:
     CATEGORY = "StyleGAN/extra"
     
     def generate_latent(self, stylegan_latent):
-        z = torch.mean(stylegan_latent, dim=0, keepdim=True)
-        std, mean = torch.std_mean(z)
-        z = (z - mean) / std
+        w = torch.mean(stylegan_latent, dim=0, keepdim=True)
+        std, mean = torch.std_mean(w)
+        w = (w - mean) / std
         
-        return (z, )
-
-class TweakStyleGANLatents:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "stylegan_latent": ("STYLEGAN_LATENT", ),
-                "index_1": ("INT", {"default": 0, "min": 0, "max": 511}),
-                "offset_1": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "index_2": ("INT", {"default": 1, "min": 0, "max": 511}),
-                "offset_2": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "index_3": ("INT", {"default": 2, "min": 0, "max": 511}),
-                "offset_3": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-                "index_4": ("INT", {"default": 3, "min": 0, "max": 511}),
-                "offset_4": ("FLOAT", {"default": 0.0, "min": -10.0, "max": 10.0, "step": 0.01}),
-            },
-        }
-    
-    RETURN_TYPES = ("STYLEGAN_LATENT",)
-    FUNCTION = "generate_latent"
-    CATEGORY = "StyleGAN/extra"
-    
-    def generate_latent(
-        self,
-        stylegan_latent,
-        index_1, offset_1,
-        index_2, offset_2,
-        index_3, offset_3,
-        index_4, offset_4,
-        ):
-        
-        z = stylegan_latent.detach().clone()
-        
-        indices = [index_1, index_2, index_3, index_4]
-        offsets = [offset_1, offset_2, offset_3, offset_4]
-        
-        for i in range(4):
-            z[:, indices[i]] += offsets[i]
-        
-        return (z, )
+        return (w, )
 
 class StyleGANLatentFromBatch:
     @classmethod
@@ -202,9 +167,9 @@ class StyleGANLatentFromBatch:
     
     def generate_latent(self, stylegan_latent, index):
         clipped_index = min(index, stylegan_latent.size(0) - 1)
-        z = stylegan_latent[clipped_index].unsqueeze(0).detach().clone()
+        w = stylegan_latent[clipped_index].unsqueeze(0).detach().clone()
         
-        return (z, )
+        return (w, )
 
 NODE_CLASS_MAPPINGS = {
     "LoadStyleGAN": LoadStyleGAN,
@@ -212,7 +177,6 @@ NODE_CLASS_MAPPINGS = {
     "StyleGANSampler": StyleGANSampler,
     "BlendStyleGANLatents": BlendStyleGANLatents,
     "BatchAverageStyleGANLatents": BatchAverageStyleGANLatents,
-    "TweakStyleGANLatents": TweakStyleGANLatents,
     "StyleGANLatentFromBatch": StyleGANLatentFromBatch,
 }
 
@@ -222,6 +186,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StyleGANSampler": "StyleGAN Sampler",
     "BlendStyleGANLatents": "Blend StyleGAN Latents (lerp or slerp)",
     "BatchAverageStyleGANLatents": "Batch Average StyleGAN Latents",
-    "TweakStyleGANLatents": "Tweak StyleGAN Latents",
     "StyleGANLatentFromBatch": "StyleGAN Latent From Batch",
 }

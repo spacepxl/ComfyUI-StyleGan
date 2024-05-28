@@ -170,6 +170,26 @@ class TweakStyleGANLatents:
         
         return (z, )
 
+class StyleGANLatentFromBatch:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "stylegan_latent": ("STYLEGAN_LATENT", ),
+                "index": ("INT", {"default": 0, "min": 0}),
+            },
+        }
+    
+    RETURN_TYPES = ("STYLEGAN_LATENT",)
+    FUNCTION = "generate_latent"
+    CATEGORY = "StyleGAN/extra"
+    
+    def generate_latent(self, stylegan_latent, index):
+        clipped_index = min(index, stylegan_latent.size(0) - 1)
+        z = stylegan_latent[clipped_index].unsqueeze(0).detach().clone()
+        
+        return (z, )
+
 NODE_CLASS_MAPPINGS = {
     "LoadStyleGAN": LoadStyleGAN,
     "GenerateStyleGANLatent": GenerateStyleGANLatent,
@@ -177,6 +197,7 @@ NODE_CLASS_MAPPINGS = {
     "BlendStyleGANLatents": BlendStyleGANLatents,
     "BatchAverageStyleGANLatents": BatchAverageStyleGANLatents,
     "TweakStyleGANLatents": TweakStyleGANLatents,
+    "StyleGANLatentFromBatch": StyleGANLatentFromBatch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -186,4 +207,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "BlendStyleGANLatents": "Blend StyleGAN Latents (lerp or slerp)",
     "BatchAverageStyleGANLatents": "Batch Average StyleGAN Latents",
     "TweakStyleGANLatents": "Tweak StyleGAN Latents",
+    "StyleGANLatentFromBatch": "StyleGAN Latent From Batch",
 }

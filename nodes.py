@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import pickle
 import torch
+from tqdm import trange
 
 from .slerp import slerp
 
@@ -12,6 +13,7 @@ sys.modules["dnnlib"] = dnnlib
 sys.modules["torch_utils"] = torch_utils
 
 import folder_paths
+from comfy.utils import PROGRESS_BAR_ENABLED, ProgressBar
 
 # set the models directory
 if "stylegan" not in folder_paths.folder_names_and_paths:
@@ -77,11 +79,21 @@ class StyleGANSampler:
         if class_label < 0:
             class_label = None
         
-        img = stylegan_model(stylegan_latent, class_label)
-        img = torch.permute(img, (0, 2, 3, 1)) # BCHW -> BHWC
-        img = torch.clip(img / 2 + 0.5, 0, 1)  # [-1, 1] -> [0, 1]
+        imgs = []
+        batch_size = stylegan_latent.size(0)
+        pbar = None
+        if PROGRESS_BAR_ENABLED and batch_size > 1:
+            pbar = ProgressBar(batch_size)
+        for i in trange(batch_size):
+            img = stylegan_model(stylegan_latent[i].unsqueeze(0), class_label)
+            img = torch.permute(img, (0, 2, 3, 1)) # BCHW -> BHWC
+            img = torch.clip(img / 2 + 0.5, 0, 1)  # [-1, 1] -> [0, 1]
+            imgs.append(img)
+            if pbar is not None:
+                pbar.update(1)
         
-        return (img, )
+        imgs = torch.cat(imgs, dim=0)
+        return (imgs, )
 
 class BlendStyleGANLatents:
     @classmethod

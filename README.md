@@ -39,7 +39,7 @@ to `ComfyUI_windows_portable/python_embeded/Include/*`
 And from `C:/Users/username/AppData/Local/Programs/Python/Python310/libs/*`  
 to `ComfyUI_windows_portable/python_embeded/libs/*`
 
-If all of that is set up correctly, when you run a StyleGAN workflow, it will first build the necessary PyTorch plugins (should take 30-60s), then generate an image. There will be a message in the console, and then subsequent images will be much faster to generate, about 0.1-0.3s on a 3090.
+If all of that is set up correctly, when you run a StyleGAN workflow, it will first build the necessary PyTorch plugins (should take 30-60s), then generate an image. There will be a message in the console, and then subsequent images will be much faster to generate (measured at 64 images/sec on a 3090 with a large batch, although ComfyUI's tensor to PIL for previews will bottleneck realtime generation to more like 8 fps)
 
 StyleGAN2:  
 ```

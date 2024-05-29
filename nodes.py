@@ -3,14 +3,17 @@ import sys
 import numpy as np
 import pickle
 import torch
+import torch.nn.functional as F
 from tqdm import trange
 
 from .slerp import slerp
 
 from . import dnnlib
 from . import torch_utils
+# from . import legacy
 sys.modules["dnnlib"] = dnnlib
 sys.modules["torch_utils"] = torch_utils
+# sys.modules["legacy"] = legacy
 
 import folder_paths
 from comfy.utils import PROGRESS_BAR_ENABLED, ProgressBar
@@ -38,6 +41,8 @@ class LoadStyleGAN:
     def load_stylegan(self, stylegan_file):
         with open(folder_paths.get_full_path("stylegan", stylegan_file), 'rb') as f:
             G = pickle.load(f)['G_ema'].cuda()
+            # device = torch.device('cuda:0')
+            # G = legacy.load_network_pkl(f)['G_ema'].requires_grad_(False).to(device)
         return (G,)
 
 class GenerateStyleGANLatent:
@@ -76,7 +81,6 @@ class StyleGANSampler:
             "required": {
                 "stylegan_model": ("STYLEGAN", ),
                 "stylegan_latent": ("STYLEGAN_LATENT", ),
-                # "class_label": ("INT", {"default": -1, "min": -1}),
                 "noise_mode": (['const', 'random'],),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
@@ -103,6 +107,71 @@ class StyleGANSampler:
         
         imgs = torch.cat(imgs, dim=0)
         return (imgs, )
+
+class StyleGANInversion:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "stylegan_model": ("STYLEGAN", ),
+                "image": ("IMAGE", ),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                "num_steps": ("INT", {"default": 1000, "min": 1}),
+                "w_avg_samples": ("INT", {"default": 10000, "min": 1, "max": 100000}),
+                "initial_learning_rate": ("FLOAT", {"default": 0.1, "min": 0.00001, "max": 1.0, "step": 0.00001}),
+                "initial_noise_factor": ("FLOAT", {"default": 0.05, "min": 0.0, "max": 1.0, "step": 0.001}),
+                "lr_rampdown_length": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "lr_rampup_length": ("FLOAT", {"default": 0.05, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "noise_ramp_length": ("FLOAT", {"default": 0.75, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "regularize_noise_weight": ("FLOAT", {"default": 1e5, "min": 0.0, "max": 1e7}),
+            },
+        }
+    
+    RETURN_TYPES = ("STYLEGAN_LATENT", "STYLEGAN_LATENT")
+    RETURN_NAMES = ("training_latents", "final_latent")
+    FUNCTION = "train_inversion"
+    CATEGORY = "StyleGAN"
+    
+    def train_inversion(
+        self,
+        stylegan_model,
+        image,
+        seed,
+        num_steps,
+        w_avg_samples,
+        initial_learning_rate,
+        initial_noise_factor,
+        lr_rampdown_length,
+        lr_rampup_length,
+        noise_ramp_length,
+        regularize_noise_weight
+        ):
+        
+        device = torch.device('cuda:0')
+        img_resolution = stylegan_model.img_resolution
+        target_image = torch.permute(image[...,:3], (0, 3, 1, 2)) # BHWC -> BCHW, RGB only
+        if target_image.shape != (stylegan_model.img_channels, img_resolution, img_resolution):
+            target_image = F.interpolate(target_image, size=(img_resolution, img_resolution), mode='area')
+        target_image = target_image[0] * 255
+        
+        from .projector import project
+        
+        projected_w_steps = project(
+            stylegan_model,
+            target_image,
+            num_steps = num_steps,
+            w_avg_samples = w_avg_samples,
+            seed = seed,
+            initial_learning_rate       = initial_learning_rate,
+            initial_noise_factor        = initial_noise_factor,
+            lr_rampdown_length          = lr_rampdown_length,
+            lr_rampup_length            = lr_rampup_length,
+            noise_ramp_length           = noise_ramp_length,
+            regularize_noise_weight     = regularize_noise_weight,
+            device                      = device,
+            )
+        
+        return (projected_w_steps, projected_w_steps[-1].unsqueeze(0))
 
 class BlendStyleGANLatents:
     @classmethod
@@ -178,6 +247,7 @@ NODE_CLASS_MAPPINGS = {
     "BlendStyleGANLatents": BlendStyleGANLatents,
     "BatchAverageStyleGANLatents": BatchAverageStyleGANLatents,
     "StyleGANLatentFromBatch": StyleGANLatentFromBatch,
+    "StyleGANInversion": StyleGANInversion,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -187,4 +257,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "BlendStyleGANLatents": "Blend StyleGAN Latents (lerp or slerp)",
     "BatchAverageStyleGANLatents": "Batch Average StyleGAN Latents",
     "StyleGANLatentFromBatch": "StyleGAN Latent From Batch",
+    "StyleGANInversion": "StyleGAN Inversion",
 }

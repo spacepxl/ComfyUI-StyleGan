@@ -1,0 +1,15 @@
+[project]
+name = "comfyui-stylegan"
+description = "Basic support for StyleGAN2 and StyleGAN3 models."
+version = "1.0.0"
+license = "LICENSE"
+dependencies = ["numpy", "pickle", "ninja"]
+
+[project.urls]
+Repository = "https://github.com/spacepxl/ComfyUI-StyleGan"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI-StyleGan"
+Icon = ""
